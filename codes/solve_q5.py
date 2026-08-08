@@ -30,7 +30,6 @@ from strategy_common import (
 
 UAV_SET = ("FY1", "FY2", "FY3", "FY4", "FY5")
 MISSILES = ("M1", "M2", "M3")
-REFINE_DT = 0.10
 REFINE_STEPS = 12
 
 
@@ -162,57 +161,32 @@ def score_plans(
     return cache[key]
 
 
-def refine_boundary(
-    missile: str,
-    smokes,
-    samples,
-    left: float,
-    right: float,
-    true_on_right: bool,
-) -> float:
+def refine_boundary(missile, smokes, samples, left: float, right: float, take_right: bool) -> float:
     for _ in range(REFINE_STEPS):
         mid = 0.5 * (left + right)
         if is_obscured(missile, smokes, mid, samples):
-            if true_on_right:
+            if take_right:
                 right = mid
             else:
                 left = mid
         else:
-            if true_on_right:
+            if take_right:
                 left = mid
             else:
                 right = mid
-    return right if true_on_right else left
+    return right if take_right else left
 
 
-def refine_intervals(missile: str, smokes, samples, intervals):
+def refine_intervals(missile, smokes, samples, intervals):
     hit_time = missile_hit_time(missile)
     refined = []
     for start, stop in intervals:
-        if start <= 1e-9:
-            start_ref = 0.0
-        else:
-            start_ref = refine_boundary(
-                missile,
-                smokes,
-                samples,
-                max(0.0, start - REFINE_DT),
-                start,
-                True,
-            )
-
-        if stop >= hit_time - 1e-9:
-            stop_ref = hit_time
-        else:
-            stop_ref = refine_boundary(
-                missile,
-                smokes,
-                samples,
-                max(0.0, stop - REFINE_DT),
-                stop,
-                False,
-            )
-
+        start_ref = 0.0 if start <= 0.0 else refine_boundary(
+            missile, smokes, samples, max(0.0, start - 0.10), start, True
+        )
+        stop_ref = hit_time if stop >= hit_time else refine_boundary(
+            missile, smokes, samples, max(0.0, stop - 0.10), stop, False
+        )
         refined.append((start_ref, stop_ref))
     return tuple(refined)
 
@@ -238,13 +212,24 @@ def solve() -> ScoredQ5:
     ]
     fine.append(score_plans(BASELINE_PLANS, fine_samples, 0.10, fine_cache))
     fine.sort(key=lambda item: item.result.total, reverse=True)
-    return fine[0]
+
+    best = fine[0]
+    smokes = smokes_from_drones(best.plans, 3)
+    refined_intervals = {
+        missile: refine_intervals(
+            missile, smokes, fine_samples, best.result.intervals[missile]
+        )
+        for missile in MISSILES
+    }
+    refined_total = sum(
+        sum(stop - start for start, stop in intervals)
+        for intervals in refined_intervals.values()
+    )
+    return ScoredQ5(best.plans, ScoreResult(refined_total, refined_intervals))
 
 
 def main() -> None:
     best = solve()
-    samples = cylinder_samples(n_theta=72, n_z=9, n_r=2)
-    smokes = smokes_from_drones(best.plans, 3)
 
     print("Question 5")
     print("note = heuristic feasible solution; not a global optimum certificate")
@@ -262,18 +247,15 @@ def main() -> None:
             print(f"    burst_position = {fmt_vec(smoke.burst_position)}")
 
     print("effective_intervals_by_missile:")
-    refined_total = 0.0
-    for missile in MISSILES:
-        intervals = refine_intervals(missile, smokes, samples, best.result.intervals[missile])
+    for missile, intervals in best.result.intervals.items():
         duration = sum(stop - start for start, stop in intervals)
-        refined_total += duration
         print(f"{missile}: {duration:.3f} s")
         if intervals:
             for start, stop in intervals:
                 print(f"  [{start:.3f}, {stop:.3f}] duration = {stop - start:.3f} s")
         else:
             print("  none")
-    print(f"total_effective_duration = {refined_total:.3f} s")
+    print(f"total_effective_duration = {best.result.total:.3f} s")
 
 
 if __name__ == "__main__":
