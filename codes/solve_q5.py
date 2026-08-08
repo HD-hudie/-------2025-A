@@ -12,6 +12,8 @@ from smoke_model import (
     UAV_MIN_SPEED,
     UAVS,
     cylinder_samples,
+    is_obscured,
+    missile_hit_time,
     missile_position,
 )
 from strategy_common import (
@@ -28,6 +30,8 @@ from strategy_common import (
 
 UAV_SET = ("FY1", "FY2", "FY3", "FY4", "FY5")
 MISSILES = ("M1", "M2", "M3")
+REFINE_DT = 0.10
+REFINE_STEPS = 12
 
 
 @dataclass(frozen=True)
@@ -158,6 +162,61 @@ def score_plans(
     return cache[key]
 
 
+def refine_boundary(
+    missile: str,
+    smokes,
+    samples,
+    left: float,
+    right: float,
+    true_on_right: bool,
+) -> float:
+    for _ in range(REFINE_STEPS):
+        mid = 0.5 * (left + right)
+        if is_obscured(missile, smokes, mid, samples):
+            if true_on_right:
+                right = mid
+            else:
+                left = mid
+        else:
+            if true_on_right:
+                left = mid
+            else:
+                right = mid
+    return right if true_on_right else left
+
+
+def refine_intervals(missile: str, smokes, samples, intervals):
+    hit_time = missile_hit_time(missile)
+    refined = []
+    for start, stop in intervals:
+        if start <= 1e-9:
+            start_ref = 0.0
+        else:
+            start_ref = refine_boundary(
+                missile,
+                smokes,
+                samples,
+                max(0.0, start - REFINE_DT),
+                start,
+                True,
+            )
+
+        if stop >= hit_time - 1e-9:
+            stop_ref = hit_time
+        else:
+            stop_ref = refine_boundary(
+                missile,
+                smokes,
+                samples,
+                max(0.0, stop - REFINE_DT),
+                stop,
+                False,
+            )
+
+        refined.append((start_ref, stop_ref))
+    return tuple(refined)
+
+
 def solve() -> ScoredQ5:
     coarse_samples = cylinder_samples(n_theta=18, n_z=5, n_r=1)
     fine_samples = cylinder_samples(n_theta=72, n_z=9, n_r=2)
@@ -184,6 +243,8 @@ def solve() -> ScoredQ5:
 
 def main() -> None:
     best = solve()
+    samples = cylinder_samples(n_theta=72, n_z=9, n_r=2)
+    smokes = smokes_from_drones(best.plans, 3)
 
     print("Question 5")
     print("note = heuristic feasible solution; not a global optimum certificate")
@@ -201,15 +262,18 @@ def main() -> None:
             print(f"    burst_position = {fmt_vec(smoke.burst_position)}")
 
     print("effective_intervals_by_missile:")
-    for missile, intervals in best.result.intervals.items():
+    refined_total = 0.0
+    for missile in MISSILES:
+        intervals = refine_intervals(missile, smokes, samples, best.result.intervals[missile])
         duration = sum(stop - start for start, stop in intervals)
+        refined_total += duration
         print(f"{missile}: {duration:.3f} s")
         if intervals:
             for start, stop in intervals:
                 print(f"  [{start:.3f}, {stop:.3f}] duration = {stop - start:.3f} s")
         else:
             print("  none")
-    print(f"total_effective_duration = {best.result.total:.3f} s")
+    print(f"total_effective_duration = {refined_total:.3f} s")
 
 
 if __name__ == "__main__":
