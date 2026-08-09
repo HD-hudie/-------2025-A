@@ -1,0 +1,235 @@
+﻿================================================================================
+文件: smoke_model.py
+时间: 2026-08-09 17:00:51
+--------------------------------------------------------------------------------
+smoke_model self-check passed
+[退出码] 0
+
+================================================================================
+文件: solve_q1.py
+时间: 2026-08-09 17:00:56
+--------------------------------------------------------------------------------
+Question 1
+heading = (-1.000000, 0.000000, 0.000000)
+speed = 120.000 m/s
+release_time = 1.500 s
+fuse_delay = 3.600 s
+burst_time = 5.100 s
+release_position = (17620.000, 0.000, 1800.000)
+burst_position = (17188.000, 0.000, 1736.496)
+burst_position_in_moving_frame = (1294.194, 13.958, 17.246)
+effective_intervals:
+  [8.060, 9.450] duration = 1.390 s
+total_effective_duration = 1.390 s
+[退出码] 0
+
+================================================================================
+文件: solve_q2.py
+时间: 2026-08-09 17:00:57
+--------------------------------------------------------------------------------
+Question 2
+heading = (-0.999488, 0.032002, 0.000000)
+heading_angle = 3.109585 rad
+speed = 80.250 m/s
+release_time = 0.400 s
+fuse_delay = 2.800 s
+burst_time = 3.200 s
+release_position = (17767.916, 1.027, 1800.000)
+burst_position = (17543.332, 8.218, 1761.584)
+effective_intervals:
+  [3.400, 7.930] duration = 4.530 s
+total_effective_duration = 4.530 s
+[退出码] 0
+
+================================================================================
+文件: solve_q3.py
+时间: 2026-08-09 17:01:14
+--------------------------------------------------------------------------------
+Question 3
+heading_angle = 3.109585 rad
+speed = 80.000 m/s
+smoke 1:
+  release_time = 0.000 s
+  fuse_delay = 2.860 s
+  burst_time = 2.860 s
+  release_position = (17800.000, 0.000, 1800.000)
+  burst_position = (17571.317, 7.322, 1759.920)
+smoke 2:
+  release_time = 1.060 s
+  fuse_delay = 2.800 s
+  burst_time = 3.860 s
+  release_position = (17715.243, 2.714, 1800.000)
+  burst_position = (17491.358, 9.882, 1761.584)
+smoke 3:
+  release_time = 2.060 s
+  fuse_delay = 2.800 s
+  burst_time = 4.860 s
+  release_position = (17635.284, 5.274, 1800.000)
+  burst_position = (17411.399, 12.442, 1761.584)
+effective_intervals:
+  [2.900, 8.420] duration = 5.520 s
+total_effective_duration = 5.520 s
+[退出码] 0
+
+================================================================================
+文件: solve_q4.py
+时间: 2026-08-09 17:01:32
+--------------------------------------------------------------------------------
+Question 4
+FY1:
+  heading_angle = 3.113585 rad
+  speed = 70.000 m/s
+  release_time = 0.802 s
+  fuse_delay = 2.823 s
+  burst_time = 3.625 s
+  release_position = (17743.882, 1.572, 1800.000)
+  burst_position = (17546.350, 7.106, 1760.950)
+FY2:
+  heading_angle = -3.025451 rad
+  speed = 70.000 m/s
+  release_time = 0.000 s
+  fuse_delay = 2.500 s
+  burst_time = 2.500 s
+  release_position = (12000.000, 1400.000, 1400.000)
+  burst_position = (11826.179, 1379.721, 1369.375)
+FY3:
+  heading_angle = 2.677945 rad
+  speed = 70.000 m/s
+  release_time = 0.000 s
+  fuse_delay = 2.500 s
+  burst_time = 2.500 s
+  release_position = (6000.000, -3000.000, 700.000)
+  burst_position = (5843.475, -2921.738, 669.375)
+effective_intervals:
+  [3.650, 8.160] duration = 4.510 s
+total_effective_duration = 4.510 s
+[退出码] 0
+
+================================================================================
+文件: solve_q5.py
+时间: 2026-08-09 17:01:49
+--------------------------------------------------------------------------------
+Question 5
+note = heuristic feasible solution; not a global optimum certificate
+FY1:
+  heading_angle = 3.095738 rad
+  speed = 72.719 m/s
+  smoke 1:
+    release_time = 0.000 s
+    fuse_delay = 2.693 s
+    burst_time = 2.693 s
+    release_position = (17800.000, 0.000, 1800.000)
+    burst_position = (17604.374, 8.977, 1764.464)
+  smoke 2:
+    release_time = 1.000 s
+    fuse_delay = 2.693 s
+    burst_time = 3.693 s
+    release_position = (17727.357, 3.333, 1800.000)
+    burst_position = (17531.731, 12.310, 1764.464)
+  smoke 3:
+    release_time = 2.000 s
+    fuse_delay = 2.693 s
+    burst_time = 4.693 s
+    release_position = (17654.715, 6.667, 1800.000)
+    burst_position = (17459.088, 15.643, 1764.464)
+FY2:
+  heading_angle = -0.735765 rad
+  speed = 128.976 m/s
+  smoke 1:
+    release_time = 12.120 s
+    fuse_delay = 2.880 s
+    burst_time = 15.000 s
+    release_position = (13158.820, 350.859, 1400.000)
+    burst_position = (13434.183, 101.558, 1359.357)
+  smoke 2:
+    release_time = 13.120 s
+    fuse_delay = 2.880 s
+    burst_time = 16.000 s
+    release_position = (13254.432, 264.296, 1400.000)
+    burst_position = (13529.795, 14.995, 1359.357)
+  smoke 3:
+    release_time = 14.120 s
+    fuse_delay = 2.880 s
+    burst_time = 17.000 s
+    release_position = (13350.044, 177.733, 1400.000)
+    burst_position = (13625.407, -71.568, 1359.357)
+FY3:
+  heading_angle = 2.677945 rad
+  speed = 70.000 m/s
+  smoke 1:
+    release_time = 0.000 s
+    fuse_delay = 2.500 s
+    burst_time = 2.500 s
+    release_position = (6000.000, -3000.000, 700.000)
+    burst_position = (5843.475, -2921.738, 669.375)
+  smoke 2:
+    release_time = 1.000 s
+    fuse_delay = 2.500 s
+    burst_time = 3.500 s
+    release_position = (5937.390, -2968.695, 700.000)
+    burst_position = (5780.865, -2890.433, 669.375)
+  smoke 3:
+    release_time = 2.000 s
+    fuse_delay = 2.500 s
+    burst_time = 4.500 s
+    release_position = (5874.780, -2937.390, 700.000)
+    burst_position = (5718.255, -2859.128, 669.375)
+FY4:
+  heading_angle = -0.777281 rad
+  speed = 131.534 m/s
+  smoke 1:
+    release_time = 7.129 s
+    fuse_delay = 9.071 s
+    burst_time = 16.200 s
+    release_position = (11668.418, 1342.346, 1800.000)
+    burst_position = (12518.920, 505.541, 1396.813)
+  smoke 2:
+    release_time = 8.129 s
+    fuse_delay = 9.071 s
+    burst_time = 17.200 s
+    release_position = (11762.179, 1250.095, 1800.000)
+    burst_position = (12612.680, 413.290, 1396.813)
+  smoke 3:
+    release_time = 9.129 s
+    fuse_delay = 9.071 s
+    burst_time = 18.200 s
+    release_position = (11855.939, 1157.845, 1800.000)
+    burst_position = (12706.441, 321.040, 1396.813)
+FY5:
+  heading_angle = 2.014078 rad
+  speed = 127.075 m/s
+  smoke 1:
+    release_time = 12.370 s
+    fuse_delay = 0.630 s
+    burst_time = 13.000 s
+    release_position = (12325.795, -580.010, 1300.000)
+    burst_position = (12291.458, -507.690, 1298.055)
+  smoke 2:
+    release_time = 13.370 s
+    fuse_delay = 0.630 s
+    burst_time = 14.000 s
+    release_position = (12271.291, -465.217, 1300.000)
+    burst_position = (12236.954, -392.897, 1298.055)
+  smoke 3:
+    release_time = 14.370 s
+    fuse_delay = 0.630 s
+    burst_time = 15.000 s
+    release_position = (12216.788, -350.424, 1300.000)
+    burst_position = (12182.451, -278.104, 1298.055)
+effective_intervals_by_missile:
+M1: 8.799 s
+  [2.693, 7.555] duration = 4.862 s
+  [16.051, 19.988] duration = 3.937 s
+M2: 2.699 s
+  [17.200, 19.899] duration = 2.699 s
+M3: 3.704 s
+  [14.162, 17.866] duration = 3.704 s
+total_effective_duration = 15.202 s
+[退出码] 0
+
+================================================================================
+文件: strategy_common.py
+时间: 2026-08-09 17:01:56
+--------------------------------------------------------------------------------
+[退出码] 0
+
