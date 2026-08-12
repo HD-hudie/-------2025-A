@@ -1,34 +1,39 @@
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from itertools import product
-from math import atan2
+from math import pi, sqrt
+import random
 
 import numpy as np
 
 from smoke_model import (
+    G,
     SMOKE_SINK_SPEED,
     TARGET_GEOMETRIC_CENTER,
     UAV_MAX_SPEED,
     UAV_MIN_SPEED,
     UAVS,
     cylinder_samples,
+    missile_hit_time,
     missile_position,
 )
 from strategy_common import (
     DronePlan,
     ScoreResult,
-    clamp_drone,
     fmt_vec,
     one_smoke_plan_from_burst_point,
-    rounded_key,
     score_smokes,
     smokes_from_drones,
 )
 
 
 UAV_SET = ("FY1", "FY2", "FY3")
-MISSILES = ("M1",)
+MISSILE = "M1"
+HIT_TIME = missile_hit_time(MISSILE)
+SEARCH_SEEDS = (17, 43, 89, 131, 173)
+POP_SIZE = 60
+GENERATIONS = 120
 
 
 @dataclass(frozen=True)
@@ -37,164 +42,187 @@ class ScoredQ4:
     result: ScoreResult
 
 
-def plan_values(plans: tuple[DronePlan, ...]) -> list[float]:
-    values: list[float] = []
-    for plan in plans:
-        values.extend([plan.angle, plan.speed, plan.release1, plan.fuse1])
-    return values
+def feasible_block(block: np.ndarray, uav: str) -> bool:
+    _, speed, release, fuse = block
+    max_fuse = sqrt(2.0 * float(UAVS[uav][2]) / G)
+    return (
+        UAV_MIN_SPEED <= speed <= UAV_MAX_SPEED
+        and 0.0 <= release <= HIT_TIME
+        and 0.0 <= fuse <= max_fuse
+        and release + fuse <= HIT_TIME
+    )
 
 
-def plan_key(plans: tuple[DronePlan, ...]) -> tuple[float, ...]:
-    return rounded_key(plan_values(plans))
+def feasible_trial(trial: np.ndarray, target: np.ndarray) -> np.ndarray:
+    trial = np.asarray(trial, dtype=float).copy()
+    for index, uav in enumerate(UAV_SET):
+        offset = 4 * index
+        trial[offset] %= 2.0 * pi
+        block = trial[offset : offset + 4]
+        if not feasible_block(block, uav):
+            trial[offset : offset + 4] = target[offset : offset + 4]
+    return trial
 
 
-def single_smoke_seeds(uav: str) -> list[DronePlan]:
-    seeds: list[DronePlan] = []
-
-    if uav == "FY1":
-        seeds.append(DronePlan("FY1", 3.113585, 71.981, 0.802, 1.0, 1.0, 2.823, 0.0, 0.0))
-
-    # Put candidate burst points near the missile-target sight line.
-    for center_time in np.linspace(4.0, 12.0, 17):
-        missile = missile_position("M1", float(center_time))
-        sight = TARGET_GEOMETRIC_CENTER - missile
-        for lag in np.linspace(0.5, 6.5, 9):
-            burst_time = float(center_time - lag)
-            if burst_time <= 0.0:
-                continue
-            for frac in np.linspace(0.004, 0.070, 12):
-                center = missile + float(frac) * sight
-                burst = center + np.array([0.0, 0.0, SMOKE_SINK_SPEED * lag])
-                plan = one_smoke_plan_from_burst_point(uav, burst_time, burst)
-                if plan is not None:
-                    seeds.append(plan)
-
-    direct_angle = atan2(-UAVS[uav][1], -UAVS[uav][0])
-    for speed in (UAV_MIN_SPEED, 90.0, 120.0, UAV_MAX_SPEED):
-        for release in (0.0, 1.0, 2.0, 4.0):
-            for fuse in (2.5, 3.5, 5.0):
-                seeds.append(DronePlan(uav, direct_angle, speed, release, 1.0, 1.0, fuse, 0.0, 0.0))
-
-    dedup: dict[tuple[float, ...], DronePlan] = {}
-    for plan in seeds:
-        plan = clamp_drone(plan, 1)
-        dedup.setdefault(rounded_key([plan.angle, plan.speed, plan.release1, plan.fuse1]), plan)
-    return list(dedup.values())
+def vector_plans(vec: np.ndarray) -> tuple[DronePlan, ...]:
+    plans = []
+    for index, uav in enumerate(UAV_SET):
+        offset = 4 * index
+        plans.append(
+            DronePlan(
+                uav,
+                float(vec[offset]),
+                float(vec[offset + 1]),
+                float(vec[offset + 2]),
+                1.0,
+                1.0,
+                float(vec[offset + 3]),
+                0.0,
+                0.0,
+            )
+        )
+    return tuple(plans)
 
 
-def score_plans(
-    plans: tuple[DronePlan, ...],
+def score_vector(
+    vec: np.ndarray,
     samples,
     dt: float,
     cache: dict[tuple[float, ...], ScoredQ4],
 ) -> ScoredQ4:
-    plans = tuple(clamp_drone(plan, 1) for plan in plans)
-    key = plan_key(plans)
+    key = (round(dt, 5), *np.round(vec, 5))
+    key = tuple(float(value) for value in key)
     if key not in cache:
-        smokes = smokes_from_drones(plans, 1)
-        cache[key] = ScoredQ4(plans, score_smokes(MISSILES, smokes, samples, dt))
+        plans = vector_plans(vec)
+        result = score_smokes(
+            (MISSILE,), smokes_from_drones(plans, 1), samples, dt
+        )
+        cache[key] = ScoredQ4(plans, result)
     return cache[key]
 
 
-def best_single_plans(uav: str, samples, dt: float, keep: int) -> list[DronePlan]:
-    scored: list[ScoredQ4] = []
-    cache: dict[tuple[float, ...], ScoredQ4] = {}
-    for plan in single_smoke_seeds(uav):
-        scored.append(score_plans((plan,), samples, dt, cache))
-    scored.sort(key=lambda item: item.result.total, reverse=True)
-    return [item.plans[0] for item in scored[:keep]]
+def sight_line_plan(uav: str, rng: random.Random) -> DronePlan:
+    for _ in range(2000):
+        center_time = rng.uniform(1.0, HIT_TIME)
+        lag = rng.uniform(0.0, min(20.0, center_time))
+        burst_time = center_time - lag
+        missile = missile_position(MISSILE, center_time)
+        sight = TARGET_GEOMETRIC_CENTER - missile
+        center = missile + rng.uniform(0.002, 0.12) * sight
+        burst = center + np.array([0.0, 0.0, SMOKE_SINK_SPEED * lag])
+        plan = one_smoke_plan_from_burst_point(uav, burst_time, burst)
+        if plan is not None and plan.release1 + plan.fuse1 <= HIT_TIME:
+            return plan
+    raise RuntimeError(f"failed to generate a feasible plan for {uav}")
 
 
-def move(plans: tuple[DronePlan, ...], flat_index: int, delta: float) -> tuple[DronePlan, ...]:
-    plan_index, field_index = divmod(flat_index, 4)
-    plan = plans[plan_index]
-    values = [plan.angle, plan.speed, plan.release1, plan.fuse1]
-    values[field_index] += delta
-    new_plan = DronePlan(plan.uav, values[0], values[1], values[2], 1.0, 1.0, values[3], 0.0, 0.0)
-    changed = list(plans)
-    changed[plan_index] = clamp_drone(new_plan, 1)
-    return tuple(changed)
+def initial_population(pop_size: int, seed: int) -> list[np.ndarray]:
+    rng = random.Random(seed)
+    population = []
+    for _ in range(pop_size):
+        plans = [sight_line_plan(uav, rng) for uav in UAV_SET]
+        population.append(
+            np.array(
+                [
+                    value
+                    for plan in plans
+                    for value in (plan.angle, plan.speed, plan.release1, plan.fuse1)
+                ],
+                dtype=float,
+            )
+        )
+    return population
 
 
-def improve(
-    start: tuple[DronePlan, ...],
+def differential_evolution(
     samples,
     dt: float,
-    steps: tuple[float, float, float, float],
     cache: dict[tuple[float, ...], ScoredQ4],
+    generations: int,
+    pop_size: int,
+    seed: int,
 ) -> ScoredQ4:
-    best = score_plans(start, samples, dt, cache)
-    improved = True
-    while improved:
-        improved = False
-        for index in range(len(start) * 4):
-            step = steps[index % 4]
-            for sign in (-1.0, 1.0):
-                scored = score_plans(move(best.plans, index, sign * step), samples, dt, cache)
-                if scored.result.total > best.result.total + 1e-9:
-                    best = scored
-                    improved = True
+    rng = random.Random(seed)
+    population = initial_population(pop_size, seed)
+    scores = [score_vector(vector, samples, dt, cache) for vector in population]
+    best = max(scores, key=lambda item: item.result.total)
+
+    for _ in range(generations):
+        for index in range(pop_size):
+            choices = [item for item in range(pop_size) if item != index]
+            first, second, third = rng.sample(choices, 3)
+            mutant = population[first] + 0.7 * (
+                population[second] - population[third]
+            )
+            trial = population[index].copy()
+            forced = rng.randrange(len(trial))
+            for dimension in range(len(trial)):
+                if dimension == forced or rng.random() < 0.9:
+                    trial[dimension] = mutant[dimension]
+            trial = feasible_trial(trial, population[index])
+
+            scored = score_vector(trial, samples, dt, cache)
+            if scored.result.total > scores[index].result.total + 1e-9:
+                population[index] = trial
+                scores[index] = scored
+            if scored.result.total > best.result.total + 1e-9:
+                best = scored
     return best
 
 
+def search_seed(seed: int) -> ScoredQ4:
+    samples = cylinder_samples(n_theta=24, n_z=5, n_r=1)
+    cache: dict[tuple[float, ...], ScoredQ4] = {}
+    return differential_evolution(
+        samples,
+        0.30,
+        cache,
+        generations=GENERATIONS,
+        pop_size=POP_SIZE,
+        seed=seed,
+    )
+
+
 def solve() -> ScoredQ4:
-    coarse_samples = cylinder_samples(n_theta=24, n_z=5, n_r=1)
-    medium_samples = cylinder_samples(n_theta=60, n_z=7, n_r=2)
     fine_samples = cylinder_samples(n_theta=180, n_z=11, n_r=5)
 
-    singles = [best_single_plans(uav, coarse_samples, 0.40, 4) for uav in UAV_SET]
-    coarse_cache: dict[tuple[float, ...], ScoredQ4] = {}
-    coarse = [
-        score_plans(tuple(combo), coarse_samples, 0.30, coarse_cache)
-        for combo in product(*singles)
-    ]
-    coarse.sort(key=lambda item: item.result.total, reverse=True)
-
-    medium_cache: dict[tuple[float, ...], ScoredQ4] = {}
-    refined = [
-        improve(item.plans, medium_samples, 0.12, (0.020, 3.0, 0.20, 0.20), medium_cache)
-        for item in coarse[:6]
-    ]
-    refined.extend(score_plans(item.plans, medium_samples, 0.12, medium_cache) for item in coarse[:6])
-    refined.sort(key=lambda item: item.result.total, reverse=True)
+    with ProcessPoolExecutor(max_workers=len(SEARCH_SEEDS)) as executor:
+        coarse_results = list(executor.map(search_seed, SEARCH_SEEDS))
 
     fine_cache: dict[tuple[float, ...], ScoredQ4] = {}
-    known_q2_bound = (
-        DronePlan("FY1", 3.113585, 71.981, 0.802, 1.0, 1.0, 2.823, 0.0, 0.0),
-        DronePlan(
-            "FY2",
-            atan2(-UAVS["FY2"][1], -UAVS["FY2"][0]),
-            UAV_MIN_SPEED,
-            0.0,
-            1.0,
-            1.0,
-            2.5,
-            0.0,
-            0.0,
-        ),
-        DronePlan(
-            "FY3",
-            atan2(-UAVS["FY3"][1], -UAVS["FY3"][0]),
-            UAV_MIN_SPEED,
-            0.0,
-            1.0,
-            1.0,
-            2.5,
-            0.0,
-            0.0,
-        ),
-    )
-    fine = [
-        score_plans(item.plans, fine_samples, 0.01, fine_cache)
-        for item in refined[:5]
+    fine_results = [
+        score_vector(
+            np.array(
+                [
+                    value
+                    for plan in result.plans
+                    for value in (plan.angle, plan.speed, plan.release1, plan.fuse1)
+                ],
+                dtype=float,
+            ),
+            fine_samples,
+            0.01,
+            fine_cache,
+        )
+        for result in coarse_results
     ]
-    fine.append(score_plans(known_q2_bound, fine_samples, 0.01, fine_cache))
-    fine.sort(key=lambda item: item.result.total, reverse=True)
-    return fine[0]
+    return max(fine_results, key=lambda item: item.result.total)
+
+
+def verify(best: ScoredQ4) -> tuple[ScoreResult, tuple[float, ...]]:
+    samples = cylinder_samples(n_theta=180, n_z=11, n_r=5)
+    smokes = smokes_from_drones(best.plans, 1)
+    result = score_smokes((MISSILE,), smokes, samples, dt=0.005)
+    individual = tuple(
+        score_smokes((MISSILE,), [smoke], samples, dt=0.005).total
+        for smoke in smokes
+    )
+    return result, individual
 
 
 def main() -> None:
     best = solve()
+    verified, individual = verify(best)
     smokes = smokes_from_drones(best.plans, 1)
 
     print("Question 4")
@@ -208,14 +236,16 @@ def main() -> None:
         print(f"  release_position = {fmt_vec(smoke.release_position)}")
         print(f"  burst_position = {fmt_vec(smoke.burst_position)}")
 
-    intervals = best.result.intervals["M1"]
     print("effective_intervals:")
+    intervals = verified.intervals["M1"]
     if intervals:
         for start, stop in intervals:
             print(f"  [{start:.3f}, {stop:.3f}] duration = {stop - start:.3f} s")
     else:
         print("  none")
-    print(f"total_effective_duration = {best.result.total:.3f} s")
+    print(f"total_effective_duration = {verified.total:.3f} s")
+    print(f"individual_durations = {tuple(round(value, 3) for value in individual)}")
+    print(f"joint_gain = {verified.total - max(individual):.3f} s")
 
 
 if __name__ == "__main__":
