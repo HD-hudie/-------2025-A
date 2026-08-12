@@ -190,20 +190,20 @@ def obscuration_margin(
     if len(target_points) == 0:
         return np.inf
 
-    frame = missile_view_frame(missile, t)
-    local_targets = frame.to_local(target_points)
-    local_centers = [
-        frame.to_local(smoke.center(t)) for smoke in smokes if smoke.is_active(t)
-    ]
-    if not local_centers:
+    centers = np.array(
+        [smoke.center(t) for smoke in smokes if smoke.is_active(t)], dtype=float
+    )
+    if len(centers) == 0:
         return np.inf
 
-    # In the moving frame the missile is fixed at the origin, so every target
-    # sample defines one local sight segment from (0, 0, 0) to that sample.
-    origin = np.zeros(3)
-    best = np.full(len(local_targets), np.inf)
-    for center in local_centers:
-        best = np.minimum(best, point_to_segments_distance(center, origin, local_targets))
+    # Euclidean segment distance is invariant under the old moving-frame
+    # rotation.  Evaluate every active smoke and sight segment in one batch.
+    segments = target_points - mpos
+    denom = np.einsum("ni,ni->n", segments, segments)
+    raw = np.einsum("si,ni->sn", centers - mpos, segments) / denom[None, :]
+    lam = np.clip(raw, 0.0, 1.0)
+    nearest = mpos + lam[:, :, None] * segments[None, :, :]
+    best = np.min(np.linalg.norm(centers[:, None, :] - nearest, axis=2), axis=0)
     return float(np.max(best - SMOKE_RADIUS))
 
 
